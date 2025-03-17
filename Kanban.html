@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban Board</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, getDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBXBQm3-0n0NMAVoi4751zZEY6BERcsNTM",
+            authDomain: "kanban-79b5c.firebaseapp.com",
+            projectId: "kanban-79b5c",
+            storageBucket: "kanban-79b5c.firebasestorage.app",
+            messagingSenderId: "296226152496",
+            appId: "1:296226152496:web:01699b5e6ba874bfe8cdf5"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        document.getElementById("add-task-btn").addEventListener("click", async () => {
+            const taskTitle = document.getElementById("task-title").value;
+            const taskDeadline = document.getElementById("task-deadline").value;
+            const taskTime = document.getElementById("task-time").value;
+            if (taskTitle.trim() === "" || taskDeadline.trim() === "" || taskTime.trim() === "") {
+                alert("El título, la fecha y la hora de la tarea no pueden estar vacíos.");
+                return;
+            }
+            await addDoc(collection(db, "tasks"), {
+                title: taskTitle,
+                deadline: `${taskDeadline} ${taskTime}`,
+                status: "todo",
+                comments: []
+            });
+            document.getElementById("task-title").value = "";
+            document.getElementById("task-deadline").value = "";
+            document.getElementById("task-time").value = "";
+        });
+
+        function renderTasks() {
+            onSnapshot(collection(db, "tasks"), (snapshot) => {
+                document.querySelectorAll(".kanban-column div").forEach(col => col.innerHTML = "");
+                snapshot.docs.forEach(docSnap => {
+                    const task = docSnap.data();
+                    const taskElement = document.createElement("div");
+                    taskElement.draggable = true;
+                    taskElement.dataset.id = docSnap.id;
+                    taskElement.textContent = `${task.title} - ${task.deadline}`;
+                    taskElement.className = "p-2 bg-gray-200 rounded m-1 cursor-pointer";
+                    taskElement.addEventListener("dragstart", (e) => {
+                        e.dataTransfer.setData("text", docSnap.id);
+                    });
+                    taskElement.addEventListener("click", () => openTaskModal(docSnap.id));
+                    document.getElementById(`${task.status}-column`).appendChild(taskElement);
+                });
+            });
+        }
+
+        document.querySelectorAll(".kanban-column").forEach(column => {
+            column.addEventListener("dragover", (e) => {
+                e.preventDefault();
+            });
+            column.addEventListener("drop", async (e) => {
+                e.preventDefault();
+                const taskId = e.dataTransfer.getData("text");
+                await updateDoc(doc(db, "tasks", taskId), { status: column.dataset.status });
+            });
+        });
+
+        function openTaskModal(taskId) {
+            document.getElementById("task-modal").classList.remove("hidden");
+            document.getElementById("add-comment-btn").dataset.taskId = taskId;
+        }
+
+        document.getElementById("add-comment-btn").addEventListener("click", async () => {
+            const taskId = document.getElementById("add-comment-btn").dataset.taskId;
+            const commentText = document.getElementById("comment-text").value;
+            if (commentText.trim() === "") return;
+            const taskRef = doc(db, "tasks", taskId);
+            await updateDoc(taskRef, {
+                comments: arrayUnion(commentText)
+            });
+            document.getElementById("comment-text").value = "";
+            alert("Comentario agregado");
+        });
+
+        renderTasks();
+    </script>
+</head>
+<body class="bg-gray-100 p-5">
+    <div id="kanban-section">
+        <input type="text" id="task-title" placeholder="Nueva tarea" class="p-2 border rounded mb-2">
+        <input type="date" id="task-deadline" class="p-2 border rounded mb-2">
+        <input type="time" id="task-time" class="p-2 border rounded mb-2">
+        <button id="add-task-btn" class="bg-green-500 text-white p-2 rounded">Agregar tarea</button>
+        <div class="grid grid-cols-3 gap-4 mt-5">
+            <div class="kanban-column bg-white p-4 rounded shadow" data-status="todo">
+                <h2 class="text-lg font-bold">Por hacer</h2>
+                <div id="todo-column" class="min-h-[300px] border"></div>
+            </div>
+            <div class="kanban-column bg-white p-4 rounded shadow" data-status="inprogress">
+                <h2 class="text-lg font-bold">En proceso</h2>
+                <div id="inprogress-column" class="min-h-[300px] border"></div>
+            </div>
+            <div class="kanban-column bg-white p-4 rounded shadow" data-status="done">
+                <h2 class="text-lg font-bold">Completado</h2>
+                <div id="done-column" class="min-h-[300px] border"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="task-modal" class="hidden fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center">
+        <div class="bg-white p-5 rounded shadow-lg">
+            <h2 class="text-lg font-bold">Comentarios</h2>
+            <textarea id="comment-text" class="w-full p-2 border rounded mb-2"></textarea>
+            <button id="add-comment-btn" class="bg-blue-500 text-white p-2 rounded">Agregar comentario</button>
+        </div>
+    </div>
+</body>
+</html>
